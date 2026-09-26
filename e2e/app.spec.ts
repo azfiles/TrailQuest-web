@@ -1,4 +1,21 @@
 import {test,expect} from '@playwright/test';
+test('fullscreen map keeps drawing controls usable on desktop and phone',async({page})=>{
+ await page.goto('./');
+ await page.getByRole('button',{name:'全屏地图'}).click();
+ const map=page.locator('.map-shell');
+ await expect(map).toHaveCSS('position','fixed');
+ const tools=page.getByRole('toolbar',{name:'地图编辑工具'});
+ await tools.getByRole('button',{name:'重新圈区'}).click();
+ for(const [x,y] of [[110,170],[220,170],[160,270]])await page.locator('.leaflet-container').click({position:{x,y}});
+ await expect(tools.getByText('3 个顶点')).toBeVisible();
+ await tools.getByRole('button',{name:'撤销'}).click();
+ await expect(tools.getByText('2 个顶点')).toBeVisible();
+ await page.locator('.leaflet-container').click({position:{x:160,y:270}});
+ await tools.getByRole('button',{name:'完成圈区'}).click();
+ await expect(page.locator('.point-row')).toHaveCount(0);
+ await page.getByRole('button',{name:'退出全屏地图'}).click();
+ await expect(map).not.toHaveClass(/expanded/);
+});
 test('redrawing an existing area keeps the draft open until it is finished',async({page})=>{
  await page.goto('./');
  const map=page.locator('.leaflet-container');
