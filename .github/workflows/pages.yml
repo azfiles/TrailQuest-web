@@ -1,0 +1,68 @@
+name: Publish GitHub Pages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/pages.yml]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test && npm run build
+      - run: node -e 'require("fs").writeFileSync("dist/build.json",JSON.stringify({revision:process.env.GITHUB_SHA}))'
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+  verify:
+    needs: deploy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium webkit
+      - name: Verify deployed HTTPS site
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          node -e 'const assert=require("assert");(async()=>{const u=process.env.BASE_URL;assert(u.startsWith("https://"));const r=await fetch(new URL("build.json",u));assert.equal(r.status,200);assert.equal((await r.json()).revision,process.env.GITHUB_SHA);console.log("HTTPS and deployed revision verified");})()'
+          npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pages-browser-verification
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

@@ -1,0 +1,22 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import * as C from '../src/core.ts';
+const center={lat:31.2304,lng:121.4737},t=1700000000000;
+function quest(kinds:C.Kind[]=['treasure']){const q=C.demoQuest(center);q.points=kinds.map((kind,i)=>({id:'point-'+i,name:kind,kind,position:center,radius:35}));return q;}
+function feed(s:C.Session,sec:number,position=center,accuracy=3){C.ingest(s,{position,accuracy,timestamp:t+sec*1000},t+sec*1000);}
+test('haversine distance and polygon inclusion',()=>{assert.ok(Math.abs(C.distance({lat:0,lng:0},{lat:0,lng:.001})-111.195)<.1);const q=quest();assert.ok(C.contains(center,q.boundary));assert.ok(C.contains(q.boundary[0],q.boundary));assert.ok(!C.contains({lat:0,lng:0},q.boundary));});
+test('valid quest and invalid self-intersection',()=>{const q=quest();assert.equal(C.questError(q),undefined);[q.boundary[1],q.boundary[2]]=[q.boundary[2],q.boundary[1]];assert.match(C.questError(q)!,/交叉/);});
+test('rejects empty, tiny, and treasure-free quests',()=>{assert.ok(C.questError(C.blank()));assert.ok(C.questError(quest(['trap'])));assert.ok(C.boundaryError([center,center,center]));});
+test('rejects out of boundary and invalid radius',()=>{const q=quest();q.points[0].position={lat:0,lng:0};assert.ok(C.questError(q));q.points[0].position=center;q.points[0].radius=NaN;assert.ok(C.questError(q));});
+test('requires dwell before scoring and finishing',()=>{const s=C.start(quest(),false,t);feed(s,0);feed(s,2);assert.equal(s.score,0);feed(s,3);assert.equal(s.score,100);assert.equal(s.status,'completed');});
+test('point cannot trigger twice',()=>{const q=quest(['treasure','treasure']);q.points[1].position=q.boundary[0];const s=C.start(q,false,t);[0,3,5,8].forEach(x=>feed(s,x));assert.equal(s.score,100);assert.equal(s.found.length,1);});
+test('poor, stale, and future fixes rejected',()=>{const s=C.start(quest(),false,t);feed(s,0,center,90);C.ingest(s,{position:center,accuracy:3,timestamp:t},t+20000);assert.equal(s.trail.length,0);assert.equal(C.usable({position:center,accuracy:3,timestamp:t+4000},t),false);});
+test('uncertainty circle must fit into point radius',()=>{const s=C.start(quest(),false,t);const p={lat:center.lat,lng:center.lng+.0003};feed(s,0,p,15);feed(s,4,p,15);assert.equal(s.score,0);});
+test('bad sample resets dwell',()=>{const s=C.start(quest(),false,t);feed(s,0);feed(s,2,center,80);feed(s,4);assert.equal(s.score,0);feed(s,7);assert.equal(s.score,100);});
+test('pause and resume break trail and reset dwell',()=>{const s=C.start(quest(),false,t);feed(s,0);C.pause(s);feed(s,4);C.resume(s);feed(s,7);assert.equal(s.score,0);assert.equal(new Set(s.trail.map(x=>x.segment)).size,2);assert.equal(s.distance,0);feed(s,10);assert.equal(s.score,100);});
+test('long gaps are not counted and reset candidates',()=>{const s=C.start(quest(),false,t);feed(s,0);feed(s,20);assert.equal(s.score,0);assert.equal(s.activeSeconds,0);});
+test('trap and supply ordering caps health',()=>{const q=quest(['trap','supply','treasure']);q.points[2].position=q.boundary[0];const s=C.start(q,false,t);feed(s,0);feed(s,3);assert.equal(s.health,100);assert.equal(s.found.length,2);});
+test('five hazards fail before treasure',()=>{const s=C.start(quest(['trap','trap','trap','trap','trap','treasure']),false,t);feed(s,0);feed(s,3);assert.equal(s.status,'failed');assert.equal(s.health,0);assert.equal(s.score,0);});
+test('outside alerts once and does not trigger',()=>{const q=quest(),s=C.start(q,false,t),out={lat:center.lat+.004,lng:center.lng};feed(s,0,out);feed(s,4,out);assert.equal(s.score,0);assert.equal(s.events.filter(x=>x.text.includes('离开')).length,1);});
+test('teleport not connected or counted',()=>{const s=C.start(quest(),false,t);feed(s,0);feed(s,1,s.quest.boundary[0]);feed(s,2,s.quest.boundary[0]);assert.equal(s.distance,0);assert.equal(new Set(s.trail.map(x=>x.segment)).size,2);});
+test('duplicate timestamp ignored',()=>{const s=C.start(quest(),false,t);feed(s,0);feed(s,0);assert.equal(s.trail.length,1);assert.equal(s.score,0);});
+test('manual end prevents further triggers',()=>{const s=C.start(quest(),false,t);C.end(s);feed(s,0);feed(s,4);assert.equal(s.status,'ended');assert.equal(s.score,0);});
+test('snapshot isolates quest editing and JSON roundtrip',()=>{const q=quest(),s=C.start(q,true,t);q.points=[];feed(s,0);feed(s,4);assert.equal(s.score,100);assert.deepEqual(JSON.parse(JSON.stringify(s)),JSON.parse(JSON.stringify(structuredClone(s))));assert.equal(s.demo,true);});
