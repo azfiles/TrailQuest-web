@@ -1,4 +1,22 @@
 import {test,expect} from '@playwright/test';
+test('redrawing an existing area keeps the draft open until it is finished',async({page})=>{
+ await page.goto('./');
+ const map=page.locator('.leaflet-container');
+ await expect(page.getByText('当前区域已完成')).toBeVisible();
+ await map.click({position:{x:140,y:150}});
+ await expect(page.getByText('当前区域已完成')).toBeVisible();
+ await page.getByRole('button',{name:'重新圈定区域'}).click();
+ await expect(page.locator('.point-row')).toHaveCount(3);
+ for(const [x,y] of [[130,150],[250,150],[190,230]])await map.click({position:{x,y}});
+ await expect(page.getByText('3 个顶点')).toBeVisible();
+ const draftPath=await page.locator('.leaflet-overlay-pane path').first().getAttribute('d');
+ expect(draftPath?.toLowerCase()).not.toContain('z');
+ await page.getByRole('button',{name:'完成圈区'}).click();
+ await expect(page.locator('.point-row')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'02 布置点位'})).toHaveClass(/on/);
+ const polygonPath=await page.locator('.leaflet-overlay-pane path').first().getAttribute('d');
+ expect(polygonPath?.toLowerCase()).toContain('z');
+});
 test('edit map, complete demo, inspect history and reload saved record',async({page},testInfo)=>{
  const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('./');await expect(page.getByRole('heading',{name:'把平凡的街角， 变成一场探险。'})).toBeVisible();await expect(page.locator('.leaflet-container')).toBeVisible();await expect(page.locator('.point-row')).toHaveCount(3);
  await page.screenshot({path:`test-results/${testInfo.project.name}-editor.png`,fullPage:true});
