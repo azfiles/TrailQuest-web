@@ -2,9 +2,9 @@ import {test,expect} from '@playwright/test';
 test('redrawing an existing area keeps the draft open until it is finished',async({page})=>{
  await page.goto('./');
  const map=page.locator('.leaflet-container');
- await expect(page.getByText('当前区域已完成')).toBeVisible();
+ await expect(page.getByText('当前区域已完成',{exact:true})).toBeVisible();
  await map.click({position:{x:140,y:150}});
- await expect(page.getByText('当前区域已完成')).toBeVisible();
+ await expect(page.getByText('当前区域已完成',{exact:true})).toBeVisible();
  await page.getByRole('button',{name:'重新圈定区域'}).click();
  await expect(page.locator('.point-row')).toHaveCount(3);
  for(const [x,y] of [[130,150],[250,150],[190,230]])await map.click({position:{x,y}});
