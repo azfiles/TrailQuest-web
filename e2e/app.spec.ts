@@ -8,6 +8,8 @@ test('edit map, complete demo, inspect history and reload saved record',async({p
 });
 test('static local storage and help without backend requests',async({page})=>{const apiCalls:string[]=[];page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/'))apiCalls.push(r.url());});await page.goto('./');await expect(page.getByText('本机存档',{exact:false})).toBeVisible();await page.getByRole('button',{name:'玩法说明',exact:true}).click();await expect(page.getByRole('heading',{name:'让好奇心带路。'})).toBeVisible();expect(apiCalls).toEqual([]);});
 test('HTTPS geolocation permission starts foreground exploration',async({page,context})=>{
+ await page.addInitScript(()=>{const geo=navigator.geolocation,original=geo.watchPosition.bind(geo);(window as any).__gps=[];geo.watchPosition=(success,error,options)=>original(p=>{(window as any).__gps.push({now:Date.now(),timestamp:p.timestamp,lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy});success(p);},error,options);});
+ try{
  await context.grantPermissions(['geolocation']);
  await context.setGeolocation({latitude:31.2312,longitude:121.4747,accuracy:3});
  await page.goto('./');
@@ -18,4 +20,5 @@ test('HTTPS geolocation permission starts foreground exploration',async({page,co
  for(let i=0;i<5;i++){await page.waitForTimeout(1100);await context.setGeolocation({latitude:31.2312+i*0.000001,longitude:121.4747,accuracy:3});}
  await expect(page.getByText('✦ 满载而归')).toBeVisible();
  await expect(page.locator('.events')).toContainText('开始真实探索');
+ }finally{console.log('GPS_DIAGNOSTIC',JSON.stringify(await page.evaluate(()=>({samples:(window as any).__gps,state:JSON.parse(localStorage.getItem('tq:TrailQuest-web:local')||'null')}))));}
 });
