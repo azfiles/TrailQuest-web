@@ -1,9 +1,6 @@
 name: Publish GitHub Pages
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: [.github/workflows/pages.yml]
 permissions:
   contents: read
   pages: write
@@ -24,8 +21,6 @@ jobs:
       - run: npm test && npm run build
       - run: node -e 'require("fs").writeFileSync("dist/build.json",JSON.stringify({revision:process.env.GITHUB_SHA}))'
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
