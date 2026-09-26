@@ -26,3 +26,20 @@ test('HTTPS foreground exploration with a deterministic simulated GPS stream',as
  await expect(page.locator('.events')).toContainText('开始真实探索');
  await expect(page.locator('.stats')).toContainText('100');
 });
+test('map source switches without exposing configured key in the page address',async({page})=>{
+ await page.addInitScript(()=>{
+  class Shape{constructor(_options:unknown){}}
+  class FakeMap{constructor(_el:HTMLElement,_options:unknown){}on(_name:string,_callback:unknown){}add(_layers:unknown){}remove(_layers:unknown){}setFitView(){}setZoomAndCenter(){}destroy(){}}
+  window.AMapLoader={load:async()=>({Map:FakeMap,Polygon:Shape,Polyline:Shape,Circle:Shape,CircleMarker:Shape,Marker:Shape,Pixel:Shape}) as any};
+ });
+ await page.goto('./');
+ await page.getByRole('button',{name:'地图源：OSM'}).click();
+ await page.getByRole('textbox',{name:'高德 Web 端 Key'}).fill('test-key-12345');
+ await page.getByRole('textbox',{name:'安全密钥'}).fill('test-code-12345');
+ await page.getByRole('button',{name:'使用高德地图'}).click();
+ await expect(page.getByRole('button',{name:'高德地图 ▾'})).toBeVisible();
+ expect(page.url()).not.toContain('test-key');
+ await page.getByRole('button',{name:'高德地图 ▾'}).click();
+ await page.getByRole('button',{name:'使用 OSM'}).click();
+ await expect(page.getByRole('button',{name:'地图源：OSM'})).toBeVisible();
+});
