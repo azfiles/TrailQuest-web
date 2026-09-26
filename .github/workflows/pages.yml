@@ -4,9 +4,6 @@ on:
   push:
     branches: [main]
     paths: [.github/workflows/pages.yml]
-  push:
-    branches: [main]
-    paths: [.github/workflows/pages.yml]
 permissions:
   contents: read
   pages: write
